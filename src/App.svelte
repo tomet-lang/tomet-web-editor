@@ -9,10 +9,23 @@
     toTypst as wasmToTypst,
     validate as wasmValidate,
   } from '@tomet/wasm';
+  import { Sidebar, SplitView, StatusBar, paneStore, type TreeNodeData } from '@shion/ui';
+  import { FolderTree } from '@lucide/svelte';
   import Editor from './components/Editor.svelte';
   import CustomTask from './components/CustomTask.svelte';
   import CustomCallout from './components/CustomCallout.svelte';
+  import VaultPane from './components/VaultPane.svelte';
   import { presets } from './presets';
+  import {
+    isFileSystemAccessSupported,
+    pickVaultDirectory,
+    verifyReadWritePermission,
+    buildVaultTree,
+    readVaultFile,
+    writeVaultFile,
+    saveVaultHandle,
+    loadVaultHandle,
+  } from './vault';
   import type { Diagnostic } from '@codemirror/lint';
 
   interface ParseErrorInfo {
@@ -55,7 +68,17 @@
   let copied = $state(false);
 
   let editorComponent: ReturnType<typeof Editor> | undefined = $state();
+  let splitSize = $state(640);
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+
+  // --- Vault (File System Access API) ---
+  let vaultRoot = $state<FileSystemDirectoryHandle | null>(null);
+  let vaultTree = $state<TreeNodeData[]>([]);
+  let vaultNeedsReconnect = $state(false);
+  let currentFilePath = $state<string | null>(null);
+  let currentFileHandle = $state<FileSystemFileHandle | null>(null);
+  let saveTimer: ReturnType<typeof setTimeout> | undefined;
+  let saveState = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   const customComponents = {
     task: CustomTask,
@@ -182,6 +205,86 @@
     debounceTimer = setTimeout(() => {
       triggerParse();
     }, wasmReady ? 30 : 150);
+
+    if (currentFileHandle) {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => saveCurrentFile(newText), 400);
+    }
+  }
+
+  async function saveCurrentFile(text: string) {
+    if (!currentFileHandle) return;
+    saveState = 'saving';
+    try {
+      await writeVaultFile(currentFileHandle, text);
+      saveState = 'saved';
+    } catch (err) {
+      console.error('Failed to save vault file:', err);
+      saveState = 'error';
+    }
+  }
+
+  async function refreshVaultTree() {
+    if (!vaultRoot) return;
+    vaultTree = await buildVaultTree(vaultRoot);
+  }
+
+  async function openVault() {
+    try {
+      const dir = await pickVaultDirectory();
+      vaultRoot = dir;
+      vaultNeedsReconnect = false;
+      await saveVaultHandle(dir);
+      await refreshVaultTree();
+    } catch (err) {
+      // AbortError when the user cancels the picker -- not a real failure.
+      if ((err as any)?.name !== 'AbortError') console.error('Failed to open vault:', err);
+    }
+  }
+
+  async function reconnectVault() {
+    if (!vaultRoot) return;
+    const granted = await verifyReadWritePermission(vaultRoot);
+    if (granted) {
+      vaultNeedsReconnect = false;
+      await refreshVaultTree();
+    }
+  }
+
+  async function openVaultFile(node: TreeNodeData) {
+    const meta = node.meta as { kind: 'file' | 'dir'; handle?: FileSystemFileHandle } | undefined;
+    if (!meta || meta.kind !== 'file' || !meta.handle) return;
+    try {
+      const content = await readVaultFile(meta.handle);
+      currentFileHandle = meta.handle;
+      currentFilePath = node.id;
+      saveState = 'idle';
+      sourceText = content;
+      editorComponent?.setContent(content);
+      triggerParse();
+    } catch (err) {
+      console.error('Failed to open vault file:', err);
+    }
+  }
+
+  // Registered once; the getters keep the pane's props live even though
+  // shion-ui's paneStore only takes a props snapshot at registration time.
+  if (!paneStore.get('files')) {
+    paneStore.register({
+      id: 'files',
+      label: 'Files',
+      icon: FolderTree,
+      content: VaultPane,
+      props: {
+        get nodes() {
+          return vaultTree;
+        },
+        get selected() {
+          return currentFilePath;
+        },
+        onselect: openVaultFile,
+      },
+    });
   }
 
   function handlePresetChange(e: Event) {
@@ -266,6 +369,22 @@
       console.warn('WASM initialization failed, using HTTP API:', e);
     }
     triggerParse();
+
+    if (isFileSystemAccessSupported()) {
+      const saved = await loadVaultHandle();
+      if (saved) {
+        vaultRoot = saved;
+        // Browsers require a user gesture to *request* permission, but
+        // checking whether it's already granted (e.g. still within the
+        // same browsing session) is fine to do on load.
+        const already = (await (saved as any).queryPermission({ mode: 'readwrite' })) === 'granted';
+        if (already) {
+          await refreshVaultTree();
+        } else {
+          vaultNeedsReconnect = true;
+        }
+      }
+    }
   });
 </script>
 
@@ -288,31 +407,68 @@
       </select>
       <button class="btn btn-primary" onclick={applyFormat} type="button">⚡ Format</button>
       <button class="btn btn-secondary" onclick={exportDocument} type="button">💾 Export .tmt</button>
+      {#if isFileSystemAccessSupported()}
+        {#if vaultNeedsReconnect}
+          <button class="btn btn-primary" onclick={reconnectVault} type="button">🔓 Reconnect Vault</button>
+        {:else}
+          <button class="btn btn-secondary" onclick={openVault} type="button">📁 {vaultRoot ? 'Change' : 'Open'} Vault</button>
+        {/if}
+      {/if}
     </div>
   </header>
 
   <main>
-    <!-- Left Pane: Editor -->
-    <div class="panel">
-      <div class="panel-header">
-        <span>Tomet Source (.tmt)</span>
-      </div>
-      <div class="editor-host">
-        <Editor
-          bind:this={editorComponent}
-          bind:value={sourceText}
-          diagnostics={editorDiagnostics()}
-          onchange={handleEditorChange}
-        />
-      </div>
-      {#if parseError}
-        <pre class="problems-panel">{parseError}</pre>
+    <Sidebar items={['files']} />
+
+    <SplitView bind:size={splitSize} defaultSize={640} minSize={360} maxSize={1400} first={editorPane} second={previewPane} />
+  </main>
+
+  <StatusBar>
+    {#snippet start()}
+      <span class={`status-dot ${parseResult?.ok ? 'ok' : 'err'}`}></span>
+      <span>
+        {parseResult?.ok
+          ? parseResult.diagnostics && parseResult.diagnostics.length > 0
+            ? `Valid Tomet (${parseResult.diagnostics.length} warnings)`
+            : 'Valid Tomet Document'
+          : parseResult?.error
+          ? `Parse Error line ${parseResult.error.line}:${parseResult.error.column}`
+          : 'Ready'}
+      </span>
+    {/snippet}
+    {#snippet end()}
+      <span>{wasmReady ? '⚡ Client WASM' : '🌐 Server API'} • Svelte 5 Engine</span>
+    {/snippet}
+  </StatusBar>
+</div>
+
+{#snippet editorPane()}
+  <div class="panel">
+    <div class="panel-header">
+      <span>{currentFilePath ?? 'Tomet Source (.tmt)'}</span>
+      {#if currentFileHandle}
+        <span class="save-indicator">
+          {#if saveState === 'saving'}Saving…{:else if saveState === 'saved'}✓ Saved{:else if saveState === 'error'}⚠ Save failed{/if}
+        </span>
       {/if}
     </div>
+    <div class="editor-host">
+      <Editor
+        bind:this={editorComponent}
+        bind:value={sourceText}
+        diagnostics={editorDiagnostics()}
+        onchange={handleEditorChange}
+      />
+    </div>
+    {#if parseError}
+      <pre class="problems-panel">{parseError}</pre>
+    {/if}
+  </div>
+{/snippet}
 
-    <!-- Right Pane: Multi-view Previews -->
-    <div class="panel">
-      <div class="panel-header">
+{#snippet previewPane()}
+  <div class="panel">
+    <div class="panel-header">
         <div class="tabs">
           <button class={`tab ${activeTab === 'svelte_preview' ? 'active' : ''}`} onclick={() => (activeTab = 'svelte_preview')}>
             ✨ Svelte 5 Component
@@ -369,24 +525,7 @@
         {/if}
       </div>
     </div>
-  </main>
-
-  <footer>
-    <div class="status-badge">
-      <span class={`status-dot ${parseResult?.ok ? 'ok' : 'err'}`}></span>
-      <span>
-        {parseResult?.ok
-          ? parseResult.diagnostics && parseResult.diagnostics.length > 0
-            ? `Valid Tomet (${parseResult.diagnostics.length} warnings)`
-            : 'Valid Tomet Document'
-          : parseResult?.error
-          ? `Parse Error line ${parseResult.error.line}:${parseResult.error.column}`
-          : 'Ready'}
-      </span>
-    </div>
-    <div style="color: var(--text-muted);">{wasmReady ? '⚡ Client WASM' : '🌐 Server API'} • Svelte 5 Engine</div>
-  </footer>
-</div>
+  {/snippet}
 
 <style>
   :global(:root) {
@@ -466,10 +605,17 @@
   main {
     flex: 1;
     min-height: 0;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
     background: var(--bg-main);
     overflow: hidden;
+  }
+  :global(main > div) {
+    min-width: 0;
+  }
+  .save-indicator {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 400;
   }
   .panel {
     display: flex;
@@ -576,18 +722,6 @@
     white-space: pre-wrap;
   }
   .empty-state { color: var(--text-muted); font-style: italic; }
-  footer {
-    height: 30px;
-    background: var(--bg-panel);
-    border-top: 1px solid var(--border);
-    padding: 0 16px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 12px;
-    flex-shrink: 0;
-  }
-  .status-badge { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
   .status-dot { width: 8px; height: 8px; border-radius: 50%; }
   .status-dot.ok { background: var(--success); }
   .status-dot.err { background: var(--error); }

@@ -1,5 +1,41 @@
+# -----------------------------------------------------------------------
+# Files ignored by Git.
+#
+# Keep project-specific ignore rules in the top section.
+# -----------------------------------------------------------------------
+
+#= Project-specific
 node_modules/
-dist/
-.direnv/
-.DS_Store
 *.local
+
+# -----------------------------------------------------------------------
+# Shared ignore rules
+# -----------------------------------------------------------------------
+
+#= Build
+build/
+dist/
+package/
+result
+result-*
+target/
+
+#= Develop
+.direnv/
+.claude/
+.cargo/config.toml
+.idea/
+.zed/
+.vscode/
+*.swp
+*~
+
+#= Environment
+.env
+.env.*
+!.env.example
+
+#= OS
+.DS_Store
+Desktop.ini
+Thumbs.db

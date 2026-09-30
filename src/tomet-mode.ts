@@ -17,8 +17,8 @@
 // `createTokenType` in that package's source) -- there's no need to
 // import `tags` here at all, the string *is* the lookup key.
 
-import { StreamLanguage } from "@codemirror/language";
 import type { StreamParser, StringStream } from "@codemirror/language";
+import { StreamLanguage } from "@codemirror/language";
 
 type EmphasisDelim = "**" | "__" | "*" | "_" | "==";
 
@@ -32,11 +32,20 @@ interface TometState {
 }
 
 function startState(): TometState {
-	return { inBlockComment: false, inFencedCode: false, emphasisStack: [], inValueGroup: 0 };
+	return {
+		inBlockComment: false,
+		inFencedCode: false,
+		emphasisStack: [],
+		inValueGroup: 0,
+	};
 }
 
 function emphasisTag(delim: EmphasisDelim): string {
-	return delim === "==" ? "strikethrough" : delim.length === 2 ? "strong" : "emphasis";
+	return delim === "=="
+		? "strikethrough"
+		: delim.length === 2
+			? "strong"
+			: "emphasis";
 }
 
 const CONNECT_RE = /^(<->|->|<-|==>|--)/;
@@ -91,8 +100,12 @@ function tokenBase(stream: StringStream, state: TometState): string | null {
 
 	for (const delim of EMPHASIS_DELIMS) {
 		if (stream.match(delim, false)) {
-			const isClose = state.emphasisStack[state.emphasisStack.length - 1] === delim;
-			const after = stream.string.slice(stream.pos + delim.length, stream.pos + delim.length + 1);
+			const isClose =
+				state.emphasisStack[state.emphasisStack.length - 1] === delim;
+			const after = stream.string.slice(
+				stream.pos + delim.length,
+				stream.pos + delim.length + 1,
+			);
 			if (isClose || (after && !/\s/.test(after))) {
 				stream.match(delim);
 				if (isClose) {
@@ -108,7 +121,10 @@ function tokenBase(stream: StringStream, state: TometState): string | null {
 	if (stream.match("${")) {
 		return "brace.special";
 	}
-	if (stream.match(INTERPOLATION_CALL_RE) || stream.match(INTERPOLATION_VAR_RE)) {
+	if (
+		stream.match(INTERPOLATION_CALL_RE) ||
+		stream.match(INTERPOLATION_VAR_RE)
+	) {
 		return "variableName.function";
 	}
 
@@ -151,11 +167,11 @@ function tokenBase(stream: StringStream, state: TometState): string | null {
 	}
 
 	// Bracket tracking for group context
-	if (stream.match(/^[\({]/)) {
+	if (stream.match(/^[({]/)) {
 		state.inValueGroup++;
 		return "punctuation";
 	}
-	if (stream.match(/^[\)}]/)) {
+	if (stream.match(/^[)}]/)) {
 		if (state.inValueGroup > 0) state.inValueGroup--;
 		return "punctuation";
 	}
@@ -205,4 +221,3 @@ const tometParser: StreamParser<TometState> = {
 };
 
 export const tometLanguage = StreamLanguage.define(tometParser);
-
