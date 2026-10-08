@@ -1,0 +1,51 @@
+@config(
+  export: {
+    type: commonmark,
+    path: "README.md"
+  }
+)
+@meta{
+  id: doc-readme,
+  lang: en
+}
+
+${macro.generated_by(self.path)}
+
+=[ Tomet Web Editor ]
+
+Interactive web playground for the @link[Tomet](https://github.com/tomet-lang/tomet) markup language, built with **Svelte 5** and **CodeMirror 6**, powered by WebAssembly (`@tomet/wasm`) and AST components (`@tomet/svelte`).
+
+==[ Features ]
+
+-| **Client-side WebAssembly parsing** via `@tomet/wasm`.
+-| **Interactive Svelte 5 AST rendering** via `@tomet/svelte`.
+-| **CodeMirror 6 Editor** with syntax highlighting and linting.
+-| **Real-time multi-view**:
+   -. Svelte Preview (interactive component rendering)
+   -. HTML Preview
+   -. AST Tree & AST JSON
+   -. CommonMark Markdown export
+   -. Typst markup export
+-| **Lossless source formatting**.
+
+==[ Development ]
+
+=== Install dependencies
+```bash
+pnpm install
+```
+
+=== Start development server
+```bash
+pnpm dev
+```
+
+=== Build for production
+```bash
+pnpm build
+pnpm preview
+```
+
+==[ License ]
+
+MIT OR Apache-2.0

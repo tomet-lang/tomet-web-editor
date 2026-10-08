@@ -1,0 +1,8 @@
+[book]
+title = "Tomet Web Editor docs"
+lang = "en"
+dest = "dist-docs"
+
+[build]
+base = "/tomet-web-editor"
+kinds = ["*", "!config", "!index"]
