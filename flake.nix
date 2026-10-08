@@ -35,6 +35,8 @@
             buildInputs = with pkgs; [
               nodejs
               pnpm
+              deno
+              just
               inputs.tomet.packages.${pkgs.stdenv.hostPlatform.system}.tomet
               inputs.tomet.packages.${pkgs.stdenv.hostPlatform.system}.tomet-lsp
             ];
