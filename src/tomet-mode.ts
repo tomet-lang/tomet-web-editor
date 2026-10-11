@@ -53,7 +53,7 @@ const HEADING_RE = /^\s*#+(?=\[)/;
 const THEMATIC_BREAK_RE = /^\s*-{3,}\s*$/;
 const TITLED_BREAK_OPEN_RE = /^\s*-{3,}(?=\[)/;
 const FENCE_RE = /^\s*```([a-zA-Z0-9_+-]*)\s*$/;
-const LIST_MARKER_RE = /^\s*(-\.|-)(?=[ \t])(\s*\([xX ?T! -]\))?/;
+const LIST_MARKER_RE = /^\s*(-\.|-)(?=[ \t@\\[|(])(\s*\([xX ?T! -]\))?/;
 const TYPE_ELEMENT_RE = /^<[A-Za-z_][A-Za-z0-9_.-]*>/;
 const AT_ELEMENT_RE = /^@[A-Za-z_][A-Za-z0-9_.-]*|^@/;
 const MAP_KEY_RE = /^[A-Za-z_][A-Za-z0-9_.-]*(?=\s*:)/;

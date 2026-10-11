@@ -1,9 +1,7 @@
 export const presets: Record<string, string> = {
-	cheatsheet: `@meta(format: json){
-  {
-    "title": "Tomet Playground",
-    "tags": ["markup", "rust", "wasm", "svelte", "react"]
-  }
+	cheatsheet: `@meta{
+  title: "Tomet Playground",
+  tags: list("markup", "rust", "wasm", "svelte", "react")
 }
 
 @config{
@@ -28,11 +26,11 @@ export const presets: Record<string, string> = {
 
 ##[ 2. Tasks & Status Lists ]{id: sprint-tasks}
 
-- ( ) Task 1: Unchecked item
-- (x) Task 2: Completed item
-- (T) Task 3: In Progress item
-- (?) Task 4: Question / Review item {priority: high}
-- (!) Task 5: Important alert item
+-@task()[ Task 1: Unchecked item ]
+-@task(x)[ Task 2: Completed item ]
+-@task(T)[ Task 3: In Progress item ]
+-@task(?)[ Task 4: Question / Review item ]{priority: high}
+-@task(!)[ Task 5: Important alert item ]
 
 ##[ 3. Callouts & Structured Elements ]
 
@@ -65,39 +63,36 @@ fn main() {
 
 ##[ Core Engine ]
 
-- (x) Design AST Span Metadata {assignee: alice, priority: high}
-- (x) Implement Lossless Formatter {status: done}
-- (x) Add Java JNI Bindings (org.tomet.tomet) {status: done}
-- (x) Implement @tomet/react and @tomet/svelte Packages {status: done}
+-@task(x)[ Design AST Span Metadata ]{assignee: alice, priority: high}
+-@task(x)[ Implement Lossless Formatter ]{status: done}
+-@task(x)[ Add Java JNI Bindings (org.tomet.tomet) ]{status: done}
+-@task(x)[ Implement @tomet/react and @tomet/svelte Packages ]{status: done}
 
 ##[ Tooling & Web ]
 
-- (T) Build Web Playground {status: in_progress, tag: dev}
-- (?) Review LSP Hover & Completion {status: pending}
-- (!) Security audit {priority: urgent}
+-@task(T)[ Build Web Playground ]{status: in_progress, tag: dev}
+-@task(?)[ Review LSP Hover & Completion ]{status: pending}
+-@task(!)[ Security audit ]{priority: urgent}
 `,
-	meta: `#[ Multi-Format Data Metadata ]
+	meta: `#[ Document Metadata & Configuration ]
 
-@meta(format: json){
-  {
-    "project": "Tomet",
-    "active": true,
-    "tags": ["markup", "rust", "parser"]
+@meta{
+  project: "Tomet",
+  version: "0.1.0",
+  active: true,
+  tags: list("markup", "rust", "parser"),
+  database: {
+    host: "127.0.0.1",
+    port: 5432,
+    pool_size: 10
   }
 }
 
-@meta(format: yaml){
-  database:
-    host: 127.0.0.1
-    port: 5432
-    pool_size: 10
-}
-
-@meta(format: toml){
-  [package]
-  name = "tomet"
-  version = "0.1.0"
-  edition = "2024"
+@config{
+  export: {
+    type: commonmark,
+    path: "README.md"
+  }
 }
 `,
 	macros: `#[ Macro Templates & Interpolation ]
